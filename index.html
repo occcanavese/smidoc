@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmiDoc</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SmiDoc"%3E %3C%21-- SmiDoc: cartella con documenti smistati%3B l'anello dorato %C3%A8 il "tesoro" da mettere in ordine --%3E %3Crect x="2" y="2" width="60" height="60" rx="14" fill="#8a4b0f"/%3E %3Cpath d="M12 22 h14 l4 4 h22 a3 3 0 0 1 3 3 v21 a3 3 0 0 1 -3 3 H12 a3 3 0 0 1 -3 -3 V25 a3 3 0 0 1 3 -3z" fill="#f6c97a"/%3E %3Crect x="16" y="13" width="15" height="19" rx="2" fill="#ffffff" transform="rotate%28-9 23 22%29"/%3E %3Crect x="29" y="11" width="15" height="19" rx="2" fill="#ffffff" transform="rotate%287 36 20%29"/%3E %3Cpath d="M19 18 h8 M19 22 h8 M19 26 h5" stroke="#b7c0cc" stroke-width="1.6" stroke-linecap="round" transform="rotate%28-9 23 22%29"/%3E %3Cpath d="M32 16 h8 M32 20 h8 M32 24 h5" stroke="#b7c0cc" stroke-width="1.6" stroke-linecap="round" transform="rotate%287 36 20%29"/%3E %3Cpath d="M10 30 H54 V50 a3 3 0 0 1 -3 3 H13 a3 3 0 0 1 -3 -3z" fill="#e8a94a"/%3E %3Ccircle cx="32" cy="41" r="6.2" fill="none" stroke="#fff3c4" stroke-width="2.6"/%3E %3Ccircle cx="32" cy="41" r="6.2" fill="none" stroke="#c98a1b" stroke-width="1" stroke-dasharray="2 3"/%3E %3C/svg%3E">
+<!--
+  SmiDoc – smistatore di documenti, versione per il browser.
+  Tutta l'elaborazione avviene NEL BROWSER dell'utente: i documenti non vengono inviati a nessun server.
+  Dalla rete si scaricano solo le librerie del programma e il vocabolario italiano dell'OCR.
+  Le categorie qui sotto (CONFIG) sono generate da categorie.toml con crea_pagina_web.py.
+-->
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+  :root {
+    --accento: #8a4b0f; --fondo-acc: #fbefe1; --testo: #1f2a37; --tenue: #475467; --bordo: #d0d5dd;
+    --bg: #f6f7f9; --carta: #ffffff; --ok: #11643a; --ok-bg: #ecf8f0; --giallo: #fff4d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --accento: #f0a35c; --fondo-acc: #3a2a1a; --testo: #e6e8eb; --tenue: #a8b0bd; --bordo: #3b4250;
+      --bg: #15181d; --carta: #1d2128; --ok: #7bd8a0; --ok-bg: #16301f; --giallo: #4a3e1a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --accento: #f0a35c; --fondo-acc: #3a2a1a; --testo: #e6e8eb; --tenue: #a8b0bd; --bordo: #3b4250;
+    --bg: #15181d; --carta: #1d2128; --ok: #7bd8a0; --ok-bg: #16301f; --giallo: #4a3e1a;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: var(--testo); background: var(--bg); line-height: 1.45; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  header h1 { margin: 0; font-size: 22px; color: var(--accento); }
+  header .sotto { color: var(--tenue); font-size: 14px; flex: 1 1 300px; }
+  button, .btn { font: inherit; font-size: 14.5px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--bordo); background: var(--carta); color: var(--testo); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accento); }
+  button.primario { background: var(--accento); color: #fff; border-color: var(--accento); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .privacy { display: flex; gap: 10px; align-items: flex-start; background: var(--ok-bg); border: 1px solid #9fd8b2; border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: 14px; }
+  .privacy b { color: var(--ok); }
+  .pannello { background: var(--carta); border: 1px solid var(--bordo); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+  .pannello h2 { margin: 0 0 8px; font-size: 16px; color: var(--accento); }
+  #zona { border: 2px dashed var(--bordo); border-radius: 12px; padding: 26px 12px; text-align: center; color: var(--tenue); cursor: pointer; transition: border-color .15s, background .15s; }
+  #zona.sopra { border-color: var(--accento); background: var(--fondo-acc); }
+  #zona b { color: var(--testo); }
+  .riga { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  #elenco { margin: 8px 0 0; padding: 0; list-style: none; font-size: 13.5px; color: var(--tenue); max-height: 120px; overflow: auto; }
+  label.opz { display: flex; gap: 8px; align-items: center; font-size: 14px; margin: 4px 0; }
+  input[type=text] { font: inherit; padding: 7px 10px; border: 1px solid var(--bordo); border-radius: 8px; background: var(--carta); color: var(--testo); min-width: 0; flex: 1 1 260px; }
+  progress { width: 100%; height: 14px; accent-color: var(--accento); }
+  #stato { font-size: 13.5px; color: var(--tenue); margin-top: 4px; min-height: 1.4em; }
+  #log { font: 12px/1.4 ui-monospace, Consolas, monospace; white-space: pre-wrap; background: var(--bg); border: 1px solid var(--bordo); border-radius: 8px; padding: 8px; max-height: 180px; overflow: auto; margin-top: 8px; display: none; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  td, th { border: 1px solid var(--bordo); padding: 6px; vertical-align: top; text-align: left; }
+  th { background: var(--fondo-acc); }
+  tr.verifica td { background: var(--giallo); }
+  td img { max-width: 110px; max-height: 110px; border: 1px solid var(--bordo); }
+  .scorri { overflow-x: auto; }
+  #risultati { display: none; }
+  .sintesi { font-size: 14px; margin: 0 0 10px; }
+  dialog { max-width: 760px; width: calc(100% - 32px); border: 1px solid var(--bordo); border-radius: 12px; background: var(--carta); color: var(--testo); padding: 0; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .guida { padding: 6px 22px 10px; max-height: 70vh; overflow: auto; font-size: 14.5px; }
+  .guida h3 { color: var(--accento); margin: 18px 0 6px; font-size: 16px; }
+  .chiudi { display: flex; justify-content: flex-end; padding: 10px 16px; border-top: 1px solid var(--bordo); }
+  code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  @media (max-width: 560px) { .wrap { padding: 10px; } header h1 { font-size: 19px; } }
+  @media print {
+    body { background: #fff; color: #000; }
+    .noprint, header button, .privacy, #pannelloIngresso, #pannelloAvvio { display: none !important; }
+    #risultati { display: block !important; border: none; padding: 0; }
+    tr { page-break-inside: avoid; }
+    tr.verifica td { background: #fff0c2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: A4 landscape; margin: 12mm; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SmiDoc"%3E %3C%21-- SmiDoc: cartella con documenti smistati%3B l'anello dorato %C3%A8 il "tesoro" da mettere in ordine --%3E %3Crect x="2" y="2" width="60" height="60" rx="14" fill="#8a4b0f"/%3E %3Cpath d="M12 22 h14 l4 4 h22 a3 3 0 0 1 3 3 v21 a3 3 0 0 1 -3 3 H12 a3 3 0 0 1 -3 -3 V25 a3 3 0 0 1 3 -3z" fill="#f6c97a"/%3E %3Crect x="16" y="13" width="15" height="19" rx="2" fill="#ffffff" transform="rotate%28-9 23 22%29"/%3E %3Crect x="29" y="11" width="15" height="19" rx="2" fill="#ffffff" transform="rotate%287 36 20%29"/%3E %3Cpath d="M19 18 h8 M19 22 h8 M19 26 h5" stroke="#b7c0cc" stroke-width="1.6" stroke-linecap="round" transform="rotate%28-9 23 22%29"/%3E %3Cpath d="M32 16 h8 M32 20 h8 M32 24 h5" stroke="#b7c0cc" stroke-width="1.6" stroke-linecap="round" transform="rotate%287 36 20%29"/%3E %3Cpath d="M10 30 H54 V50 a3 3 0 0 1 -3 3 H13 a3 3 0 0 1 -3 -3z" fill="#e8a94a"/%3E %3Ccircle cx="32" cy="41" r="6.2" fill="none" stroke="#fff3c4" stroke-width="2.6"/%3E %3Ccircle cx="32" cy="41" r="6.2" fill="none" stroke="#c98a1b" stroke-width="1" stroke-dasharray="2 3"/%3E %3C/svg%3E" alt="" width="40" height="40" style="border-radius:9px"><h1>SmiDoc</h1>
+    <div class="sotto">Smistatore di documenti per le pratiche dell'OCC del Canavese</div>
+    <button id="btnAiuto" type="button">? Aiuto</button>
+  </header>
+
+  <div class="privacy"><span>&#128274;</span><div><b>I documenti restano sul tuo PC.</b>
+    SmiDoc lavora dentro il browser: foto e PDF non vengono caricati su nessun server. Alla prima apertura si scaricano solo
+    le librerie del programma e il vocabolario italiano per la lettura del testo.</div></div>
+
+  <section class="pannello" id="pannelloIngresso">
+    <h2>1. File ricevuti dal debitore</h2>
+    <div id="zona" tabindex="0" role="button" aria-label="Scegli o trascina i file">
+      <b>Trascina qui foto e PDF</b> oppure clicca per sceglierli<br><small>JPG, PNG, PDF (anche più documenti insieme, anche pagine sparse)</small>
+    </div>
+    <input id="scegli" type="file" multiple accept=".pdf,image/*" hidden>
+    <ul id="elenco"></ul>
+    <div class="riga"><button id="btnSvuota" type="button">Svuota elenco</button><span id="contaFile" class="sotto"></span></div>
+  </section>
+
+  <section class="pannello" id="pannelloAvvio">
+    <h2>2. Pratica e avvio</h2>
+    <div class="riga" style="margin-top:0">
+      <input id="pratica" type="text" placeholder="Nome della pratica (es. ROSSI Mario) – serve per il nome dello zip">
+    </div>
+    <label class="opz"><input id="colore" type="checkbox"> Mantieni i colori (timbri, firme)</label>
+    <div class="riga">
+      <button id="btnAvvia" class="primario" type="button" disabled>Avvia smistamento</button>
+      <span id="caricamento" class="sotto">Preparazione del programma…</span>
+    </div>
+    <progress id="barra" value="0" max="100" style="margin-top:10px"></progress>
+    <div id="stato"></div>
+    <div id="log"></div>
+  </section>
+
+  <section class="pannello" id="risultati">
+    <div class="riga noprint" style="margin-top:0; justify-content:space-between">
+      <h2 style="margin:0">3. Risultati</h2>
+      <div class="riga" style="margin-top:0">
+        <button id="btnZip" class="primario" type="button">&#11015;&#65039; Scarica lo zip</button>
+        <button id="btnStampa" type="button">&#128424; Stampa / Salva PDF del riepilogo</button>
+      </div>
+    </div>
+    <div id="riepilogo"></div>
+  </section>
+  <footer class="noprint" style="font-size:13px;color:var(--tenue);padding:6px 2px 20px">
+    SmiDoc – OCC del Canavese · <a href="linux/SmiDoc-Linux.tar.gz" style="color:var(--accento)">versione da installare su Linux</a>
+    (scrive direttamente nella cartella della pratica) · segnalazioni: occ@modellocanavese.it
+  </footer>
+</div>
+
+<dialog id="dlgAiuto">
+  <div class="guida" id="testoGuida"></div>
+  <div class="chiudi"><button type="button" onclick="document.getElementById('dlgAiuto').close()">Chiudi</button></div>
+</dialog>
+
+<script>
+/* ============================================================ configurazione (da categorie.toml) */
+const CONFIG = {"cartelle": {"aci_pra": "ACI PRA", "anagrafe": "ANAGRAFE", "rapporti_finanziari": "ANAGRAFE RAPPORTI FINANZIARI", "attivo": "ATTIVO", "banche_dati": "BANCHE DATI", "cancelleria": "CANCELLERIA ESEC. MOB. IMMOB", "casellario": "CASELLARIO e CARICHI", "check_list": "CHECK LIST", "comunicazione_68": "COMUNICAZIONE EX ART 68 co 4 CCII", "dichiarazioni": "DICHIARAZIONI SOST. ATTO NOTORIO", "docs_ricevuti": "DOCS RICEVUTI DAL DEBITORE", "ec_previdenziale": "ESTRATTO CONTO PREVIDENZIALE", "export_ec": "EXPORT EC", "incontri": "INCONTRI CON IL SOVRAINDEBITATO", "isee": "ISEE", "massa_passiva": "MASSA PASSIVA", "preventivo_occ": "PREVENTIVO OCC", "scaricati_telematico": "SCARICATI DAL TELEMATICO", "spese_nucleo": "SPESE SOST.NUCLEO", "visura_catastale": "VISURA CATASTALE", "visura_cciaa": "VISURA STORICA CCIAA", "da_verificare": "_DA_VERIFICARE"}, "opzioni": {"crea_tutte_le_cartelle": true}, "tipi": [{"nome": "Carta d'identità", "sigla": "Carta-identita", "cartella": "anagrafe", "parole": ["comune di", "cittadinanza", "statura", "luogo e data di nascita", "scadenza", "documento di riconoscimento"], "forti": ["carta d'identità", "carta di identità", "identity card"]}, {"nome": "Codice fiscale / Tessera sanitaria", "sigla": "Tessera-sanitaria-CF", "cartella": "anagrafe", "parole": ["codice fiscale", "data di scadenza", "ministero dell'economia"], "forti": ["tessera sanitaria", "tessera europea di assicurazione malattia"]}, {"nome": "Certificato di residenza", "sigla": "Certificato-residenza", "cartella": "anagrafe", "parole": ["risulta residente", "anagrafe", "ufficiale d'anagrafe", "residenza"], "forti": ["certificato di residenza"]}, {"nome": "Stato di famiglia", "sigla": "Stato-famiglia", "cartella": "anagrafe", "parole": ["famiglia anagrafica", "rapporto di parentela", "intestatario scheda", "componenti"], "forti": ["stato di famiglia", "certificato di stato di famiglia"]}, {"nome": "Certificato contestuale", "sigla": "Certificato-contestuale", "cartella": "anagrafe", "parole": ["residenza", "stato di famiglia", "cittadinanza", "anagrafe"], "forti": ["certificato contestuale"]}, {"nome": "Permesso di soggiorno", "sigla": "Permesso-soggiorno", "cartella": "anagrafe", "parole": ["questura", "tipo di permesso"], "forti": ["permesso di soggiorno", "residence permit"]}, {"nome": "Busta paga", "sigla": "Busta-paga", "cartella": "attivo", "parole": ["retribuzione", "netto in busta", "netto a pagare", "trattenute", "imponibile previdenziale", "imponibile irpef", "competenze", "matricola"], "forti": ["cedolino", "busta paga", "prospetto paga"]}, {"nome": "Certificazione Unica (CU)", "sigla": "CU", "cartella": "attivo", "parole": ["sostituto d'imposta", "redditi di lavoro dipendente", "dati fiscali", "percipiente"], "forti": ["certificazione unica", "certificazione di cui all'art. 4"]}, {"nome": "Dichiarazione dei redditi (730 / Redditi PF)", "sigla": "Dichiarazione-redditi", "cartella": "attivo", "parole": ["dichiarazione dei redditi", "quadro rn", "reddito complessivo", "irpef", "dichiarante", "periodo d'imposta"], "forti": ["modello 730", "redditi persone fisiche", "730-3", "prospetto di liquidazione 730"]}, {"nome": "Cedolino pensione", "sigla": "Cedolino-pensione", "cartella": "attivo", "parole": ["inps", "rata di pensione", "importo lordo", "categoria pensione"], "forti": ["cedolino della pensione", "obis m", "certificazione della pensione"]}, {"nome": "Estratto conto bancario / postale", "sigla": "Estratto-conto", "cartella": "attivo", "parole": ["saldo iniziale", "saldo finale", "saldo contabile", "data valuta", "iban", "movimenti", "conto corrente", "dare", "avere"], "forti": ["estratto conto", "lista movimenti", "saldo e lista movimenti", "rendiconto conto corrente", "data operazione data valuta", "saldo a data"]}, {"nome": "Visura catastale", "sigla": "Visura-catastale", "cartella": "visura_catastale", "parole": ["agenzia delle entrate", "catasto fabbricati", "rendita", "foglio", "particella", "subalterno", "categoria"], "forti": ["visura catastale", "visura per soggetto", "visura per immobile"]}, {"nome": "Atto notarile / Rogito", "sigla": "Atto-notarile", "cartella": "attivo", "parole": ["notaio", "atto", "parte venditrice", "parte acquirente", "costituiti"], "forti": ["repertorio n", "raccolta n", "compravendita"]}, {"nome": "Veicolo (libretto / carta di circolazione)", "sigla": "Libretto-veicolo", "cartella": "attivo", "parole": ["targa", "telaio", "immatricolazione", "intestatario", "motorizzazione", "massa complessiva", "cilindrata"], "forti": ["carta di circolazione", "documento unico di circolazione", "certificato di proprieta"]}, {"nome": "Contratto di locazione", "sigla": "Contratto-locazione", "cartella": "spese_nucleo", "parole": ["locatore", "conduttore", "canone", "immobile locato", "durata della locazione"], "forti": ["contratto di locazione", "contratto di affitto"]}, {"nome": "Nota di trascrizione / Ispezione ipotecaria", "sigla": "Ipotecaria-trascrizione", "cartella": "attivo", "parole": ["registro generale", "registro particolare", "conservatoria", "formalita", "ipoteca"], "forti": ["nota di trascrizione", "nota di iscrizione", "ispezione ipotecaria", "pubblicita immobiliare", "elenco sintetico delle formalita"]}, {"nome": "Ricevuta di bonifico / pagamento", "sigla": "Ricevuta-bonifico", "cartella": "attivo", "parole": ["beneficiario", "ordinante", "cro", "trn", "iban", "data esecuzione"], "forti": ["bonifico europeo unico", "ricevuta di bonifico", "esito bonifico", "disposizione di bonifico", "contabile bancaria"]}, {"nome": "Modello F24", "sigla": "F24", "cartella": "massa_passiva", "parole": ["sezione erario", "codice tributo", "saldo finale", "contribuente", "f24", "dati anagrafici", "domicilio fiscale", "estremi del versamento"], "forti": ["modello di pagamento unificato", "modello di pagamento", "quietanza di versamento", "delega irrevocabile"]}, {"nome": "Fattura / Parcella professionale", "sigla": "Fattura-parcella", "cartella": "massa_passiva", "parole": ["onorari", "imponibile", "cassa", "ritenuta d'acconto", "iva", "totale documento", "prestazione"], "forti": ["parcella n", "fattura n", "avviso di parcella", "nota competenze", "notula"]}, {"nome": "Contratto di finanziamento / mutuo", "sigla": "Contratto-finanziamento", "cartella": "massa_passiva", "parole": ["taeg", "tan", "piano di ammortamento", "rata", "finanziatore"], "forti": ["contratto di finanziamento", "contratto di mutuo", "prestito personale", "secci", "informazioni europee di base sul credito ai consumatori"]}, {"nome": "Cessione del quinto", "sigla": "Cessione-quinto", "cartella": "massa_passiva", "parole": ["quote", "stipendio", "amministrazione terza ceduta", "datore di lavoro"], "forti": ["cessione del quinto", "cessione di quote dello stipendio", "delegazione di pagamento"]}, {"nome": "Precisazione del credito / saldo a debito", "sigla": "Precisazione-credito", "cartella": "massa_passiva", "parole": ["debito residuo", "insoluto", "capitale residuo", "interessi di mora", "credito"], "forti": ["precisazione del credito", "precisazione credito", "conteggio estintivo", "saldo a debito"]}, {"nome": "Sollecito / Diffida / Lettera di messa in mora", "sigla": "Sollecito-diffida", "cartella": "massa_passiva", "parole": ["insoluto", "recupero crediti", "entro e non oltre", "importo scaduto", "cessionaria"], "forti": ["messa in mora", "diffida", "sollecito di pagamento", "avviso di cessione", "decadenza dal beneficio del termine", "risoluzione del contratto"]}, {"nome": "Atto giudiziario (decreto ingiuntivo, precetto, pignoramento)", "sigla": "Atto-giudiziario", "cartella": "massa_passiva", "parole": ["tribunale", "ingiunge", "precetto", "ufficiale giudiziario", "esecuzione", "creditore procedente"], "forti": ["decreto ingiuntivo", "atto di precetto", "pignoramento presso terzi", "atto di pignoramento", "ricorso per decreto ingiuntivo", "attestazione di conformita", "relata di notifica"]}, {"nome": "Cartella / Avviso fiscale", "sigla": "Cartella-avviso-fiscale", "cartella": "massa_passiva", "parole": ["agenzia delle entrate-riscossione", "agenzia delle entrate", "ruolo", "tributo", "importo dovuto"], "forti": ["cartella di pagamento", "avviso di accertamento", "intimazione di pagamento", "avviso bonario", "comunicazione di irregolarità", "avviso di liquidazione", "irrogazione delle sanzioni"]}, {"nome": "Bolletta utenze", "sigla": "Bolletta", "cartella": "spese_nucleo", "parole": ["kwh", "smc", "pod", "pdr", "periodo di fornitura", "totale da pagare", "consumi"], "forti": ["bolletta", "fornitura di energia elettrica", "fornitura di gas", "servizio idrico"]}, {"nome": "Spese condominiali", "sigla": "Spese-condominiali", "cartella": "massa_passiva", "parole": ["condominio", "condomini", "condomino", "amministratore", "millesimi", "quote condominiali", "assemblea"], "forti": ["rendiconto condominiale", "riparto spese", "bilancio consuntivo", "preventivo di gestione", "amministrazione condomini", "estratto conto condomino", "situazione contabile", "spese condominiali"]}, {"nome": "Assicurazione", "sigla": "Assicurazione", "cartella": "spese_nucleo", "parole": ["premio", "contraente", "assicurato", "rca", "compagnia"], "forti": ["polizza assicurativa", "contratto di assicurazione", "certificato di assicurazione", "quietanza di pagamento premio"]}, {"nome": "Spese mediche / scolastiche / varie", "sigla": "Spese-varie", "cartella": "spese_nucleo", "parole": ["farmacia", "ticket sanitario", "prestazione sanitaria", "mensa scolastica", "scuola"], "forti": ["documento commerciale", "scontrino", "ricevuta fiscale", "retta scolastica"]}, {"nome": "ISEE / DSU", "sigla": "ISEE", "cartella": "isee", "parole": ["isee", "nucleo familiare", "scala di equivalenza"], "forti": ["attestazione isee", "dichiarazione sostitutiva unica", "indicatore della situazione economica equivalente"]}, {"nome": "Visura ACI-PRA (attuale e storica)", "sigla": "Visura-ACI-PRA", "cartella": "aci_pra", "parole": ["aci", "pra", "targa", "telaio", "formalita", "intestatario", "esito"], "forti": ["visura pra", "pubblico registro automobilistico", "visura aci", "visura storica", "visura nominativa", "elenco veicoli intestati"]}, {"nome": "CAI - Centrale di Allarme Interbancaria", "sigla": "CAI", "cartella": "banche_dati", "parole": ["banca d'italia", "revoca", "assegni", "carte di pagamento", "iscrizione", "cai"], "forti": ["centrale di allarme interbancaria", "centrale d'allarme interbancaria", "archivio cai", "segnalazione cai"]}, {"nome": "Centrale Rischi Banca d'Italia", "sigla": "Centrale-Rischi-BdI", "cartella": "banche_dati", "parole": ["banca d'italia", "intermediario", "accordato", "utilizzato", "segnalazione"], "forti": ["centrale dei rischi", "centrale rischi"]}, {"nome": "CRIF / Experian / CTC", "sigla": "SIC-CRIF-Experian-CTC", "cartella": "banche_dati", "parole": ["informazioni creditizie", "richiesta di accesso", "finanziamenti", "codice contratto"], "forti": ["crif", "experian", "consorzio per la tutela del credito", "sistema di informazioni creditizie", "eurisc"]}, {"nome": "Estratto di ruolo / Situazione debitoria AdER", "sigla": "Estratto-ruolo-AdER", "cartella": "banche_dati", "parole": ["agenzia delle entrate-riscossione", "cartelle", "carichi", "residuo"], "forti": ["estratto di ruolo", "situazione debitoria", "prospetto informativo"]}, {"nome": "Anagrafe tributaria / Rapporti finanziari", "sigla": "Rapporti-finanziari", "cartella": "rapporti_finanziari", "parole": ["rapporti", "operatore finanziario", "agenzia delle entrate"], "forti": ["archivio dei rapporti finanziari", "anagrafe tributaria", "cassetto fiscale"]}, {"nome": "Estratto contributivo / posizione INPS-INAIL", "sigla": "Estratto-INPS-INAIL", "cartella": "ec_previdenziale", "parole": ["inps", "inail", "contributi", "settimane", "periodo"], "forti": ["estratto conto contributivo", "estratto contributivo", "posizione assicurativa"]}, {"nome": "Certificato casellario / carichi pendenti", "sigla": "Casellario-carichi-pendenti", "cartella": "casellario", "parole": ["procura della repubblica", "nulla", "iscrizioni", "ufficio locale del casellario"], "forti": ["casellario giudiziale", "carichi pendenti", "certificato del casellario"]}, {"nome": "Certificato Cancelleria esecuzioni mobiliari/immobiliari e procedure concorsuali", "sigla": "Certificato-tribunale", "cartella": "cancelleria", "parole": ["tribunale", "cancelleria", "si certifica", "risulta", "fallimento", "esecuzioni"], "forti": ["certificato fallimentare", "procedure concorsuali", "non risultano procedure", "certificato delle esecuzioni", "esecuzioni mobiliari", "esecuzioni immobiliari", "cancelleria esecuzioni"]}, {"nome": "Visura storica / camerale CCIAA", "sigla": "Visura-CCIAA", "cartella": "visura_cciaa", "parole": ["camera di commercio", "cciaa", "rea", "cariche", "partita iva", "sede legale"], "forti": ["visura camerale", "visura storica", "registro delle imprese", "fascicolo d'impresa", "scheda persona"]}, {"nome": "Visura protesti", "sigla": "Visura-protesti", "cartella": "banche_dati", "parole": ["protesti", "camera di commercio", "cambiali", "assegni"], "forti": ["visura protesti", "registro informatico dei protesti"]}, {"nome": "Dichiarazione sostitutiva (atto notorio / certificazione)", "sigla": "Dichiarazione-sostitutiva", "cartella": "dichiarazioni", "parole": ["d.p.r. 445/2000", "dpr 445/2000", "art. 47", "art. 46", "consapevole delle sanzioni penali", "dichiara"], "forti": ["dichiarazione sostitutiva dell'atto di notorieta", "dichiarazione sostitutiva di atto di notorieta", "dichiarazione sostitutiva di certificazione", "autocertificazione"]}, {"nome": "Certificato medico / invalidità", "sigla": "Certificato-medico", "cartella": "docs_ricevuti", "parole": ["commissione medica", "asl", "diagnosi", "percentuale"], "forti": ["verbale di accertamento", "invalidità civile", "legge 104", "certificato medico"]}]};
+const GUIDA_HTML = "<h2 style='color:var(--accento)'>SmiDoc – guida rapida (versione web)</h2>\n<p>SmiDoc prende i documenti che ci mandano i debitori <b>così come arrivano</b> (foto col telefono, scansioni storte, PDF con più documenti dentro, documenti spezzati in più foto) e li trasforma in <b>PDF puliti, uno per documento</b>, ordinati nelle cartelle della pratica.</p>\n<h3>I documenti restano sul tuo PC</h3>\n<p>SmiDoc lavora <b>dentro il browser</b>: foto e PDF non vengono caricati su nessun server, né dell&#x27;OCC né di altri. Alla prima apertura il browser scarica solo il programma e il <b>vocabolario italiano</b> per leggere il testo (circa 15 MB, poi resta in memoria). Funziona meglio con <b>Chrome, Edge o Firefox</b> aggiornati, su computer (non sul telefono).</p>\n<h3>Come si usa (3 passi)</h3>\n<ol>\n<li><b>File ricevuti</b>: trascina nel riquadro le foto e i PDF del debitore, oppure clicca sul riquadro per sceglierli. Si possono mescolare file di tipi diversi.</li>\n<li>Scrivi il <b>nome della pratica</b> (serve per il nome dello zip) e premi <b>Avvia smistamento</b>. Attendi la fine: le foto richiedono qualche secondo l&#x27;una.</li>\n<li>Controlla il <b>riepilogo</b>, poi premi <b>Scarica lo zip</b> e scompattalo nella cartella della pratica: troverai le cartelle ANAGRAFE, ATTIVO, MASSA PASSIVA, BANCHE DATI, ACI PRA, ISEE, SPESE SOST.NUCLEO… con i PDF già dentro.</li>\n</ol>\n<h3>Cosa fa, in breve</h3>\n<ul>\n<li><b>Pulisce le foto</b>: ritaglia il foglio, lo raddrizza, toglie tovaglia, dita, ombre; gira le pagine capovolte.</li>\n<li><b>Riconosce il documento</b> leggendo il testo (carta d&#x27;identità, busta paga, estratto conto, CRIF, visura PRA…).</li>\n<li><b>Divide</b> un file che contiene più documenti e <b>unisce</b> le foto che sono pagine dello stesso documento.</li>\n<li><b>Salva un PDF per documento</b>, leggero e con il testo ricercabile, adatto al deposito telematico.</li>\n</ul>\n<h3>Il riepilogo: da controllare sempre</h3>\n<p>Dopo l&#x27;elaborazione compare l&#x27;elenco dei documenti creati: anteprima, nome del file, cartella, tipo riconosciuto, da quali file e pagine proviene, e cosa è stato fatto.</p>\n<ul>\n<li>Le righe in <b>giallo</b> sono da controllare: documento non riconosciuto o pagine unite &quot;per vicinanza&quot;.</li>\n<li>I documenti non riconosciuti finiscono nella cartella <b>_DA_VERIFICARE</b>: spostali tu nella cartella giusta.</li>\n<li>Con <b>Stampa / Salva PDF del riepilogo</b> puoi stamparlo o salvarlo in PDF. Una copia è anche dentro lo zip, nella cartella <code>_SmiDoc</code>.</li>\n</ul>\n<h3>Nomi dei file</h3>\n<p>Ogni PDF prende il nome <b>data_tipo</b>, ad esempio <code>2026-09-15_Certificato-residenza.pdf</code> o <code>2026-08_Busta-paga.pdf</code>. La data è quella di rilascio o di fine periodo, mai quella di nascita.</p>\n<h3>Opzioni</h3>\n<ul>\n<li><b>Mantieni i colori</b>: utile per documenti con timbri o firme a colori. Senza spunta i PDF sono in scala di grigi, più leggeri.</li>\n</ul>\n<h3>Consigli per buoni risultati</h3>\n<ul>\n<li>Foto <b>dall&#x27;alto</b>, con il foglio intero e ben illuminato. Lo sfondo scuro aiuta.</li>\n<li>Più pagine dello stesso documento: meglio se le foto sono <b>in ordine</b> e mandate insieme (es. WA0011, WA0012…).</li>\n<li>Documenti molto sbiaditi o scritti a mano possono non essere riconosciuti: finiranno in _DA_VERIFICARE.</li>\n<li>Molti file insieme richiedono tempo e memoria: meglio elaborare una pratica alla volta.</li>\n</ul>\n<h3>Se qualcosa non va</h3>\n<ul>\n<li><b>Il programma non si carica</b>: controlla la connessione e ricarica la pagina (serve solo la prima volta).</li>\n<li><b>Un documento è nella cartella sbagliata</b>: spostalo a mano; se succede spesso, segnalalo a occ@modellocanavese.it.</li>\n<li>Esiste anche la versione da installare su <b>Linux</b>, che scrive direttamente nella cartella della pratica: la trovi nella pagina SmiDoc del sito Gestori.</li>\n</ul>\n<p>Tasto rapido: <b>F1</b> apre questa guida.</p>";
+const DPI = 200, LATO_MAX = Math.round(11.7 * DPI), QUALITA_JPEG = 0.7;
+
+/* ============================================================ utilità */
+const $ = id => document.getElementById(id);
+const pausa = () => new Promise(r => setTimeout(r, 0));
+function log(t) { const l = $("log"); l.style.display = "block"; l.textContent += t + "\n"; l.scrollTop = l.scrollHeight; }
+function stato(t, perc) { $("stato").textContent = t; if (perc != null) $("barra").value = perc; }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function norm(s) {
+  return s.replace(/[’`]/g, "'").toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").replace(/\s+/g, " ");
+}
+function frase(p) {
+  p = norm(p).trim();
+  const e = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return { rx: new RegExp("(?<![a-z0-9])" + e + "(?![a-z0-9])"), n: p.split(" ").length };
+}
+const TIPI = CONFIG.tipi.map(t => ({ ...t, parole: t.parole.map(frase), forti: t.forti.map(frase) }));
+
+/* ============================================================ caricamento librerie pesanti */
+let cvPronto = null, ocr = null;
+function caricaScript(src) {
+  return new Promise((ok, ko) => { const s = document.createElement("script"); s.src = src; s.async = true; s.onload = ok; s.onerror = () => ko(new Error("impossibile caricare " + src)); document.head.appendChild(s); });
+}
+async function preparaOpenCV() {
+  await caricaScript("https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js");
+  if (window.cv instanceof Promise) window.cv = await window.cv;
+  else if (!window.cv.Mat) await new Promise(r => { window.cv.onRuntimeInitialized = r; });
+}
+async function preparaOCR() {
+  ocr = await Tesseract.createWorker("ita", 1, {
+    logger: m => { if (m.status && m.status.includes("loading") && m.progress) $("caricamento").textContent = "Scarico il vocabolario italiano… " + Math.round(m.progress * 100) + "%"; }
+  });
+}
+async function prepara() {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+  try {
+    $("caricamento").textContent = "Carico il programma (la prima volta può richiedere un minuto)…";
+    await Promise.all([preparaOpenCV(), preparaOCR()]);
+    $("caricamento").textContent = "Pronto.";
+    window.SMIDOC_PRONTO = true;
+    aggiornaPulsanti();
+  } catch (e) {
+    $("caricamento").textContent = "Errore nel caricamento del programma: " + e.message + ". Controlla la connessione e ricarica la pagina.";
+  }
+}
+
+/* ============================================================ raccolta dei file */
+let FILES = [];
+function ordineNaturale(a, b) { return a.name.localeCompare(b.name, "it", { numeric: true, sensitivity: "base" }); }
+function aggiungi(lista) {
+  for (const f of lista) if (!FILES.some(x => x.name === f.name && x.size === f.size)) FILES.push(f);
+  FILES.sort(ordineNaturale);
+  $("elenco").innerHTML = FILES.map(f => "<li>" + esc(f.name) + " <small>(" + Math.round(f.size / 1024) + " KB)</small></li>").join("");
+  $("contaFile").textContent = FILES.length ? FILES.length + " file" : "";
+  aggiornaPulsanti();
+}
+function aggiornaPulsanti() { $("btnAvvia").disabled = !(window.SMIDOC_PRONTO && FILES.length && !window.SMIDOC_IN_CORSO); }
+
+/* ============================================================ pulizia immagini (OpenCV) */
+function matDaCanvas(c) { return cv.imread(c); }   // RGBA
+function canvasDaMat(m) { const c = document.createElement("canvas"); cv.imshow(c, m); return c; }
+function ordinaPunti(p) {   // p: array di [x,y]
+  const s = p.map(q => q[0] + q[1]), d = p.map(q => q[1] - q[0]);
+  const i = (arr, f) => arr.indexOf(f(...arr));
+  return [p[i(s, Math.min)], p[i(d, Math.min)], p[i(s, Math.max)], p[i(d, Math.max)]];
+}
+function puntiDaMat(m) { const r = []; for (let i = 0; i < m.rows; i++) r.push([m.data32S[i * 2], m.data32S[i * 2 + 1]]); return r; }
+function areaPoligono(p) { let a = 0; for (let i = 0; i < p.length; i++) { const [x1, y1] = p[i], [x2, y2] = p[(i + 1) % p.length]; a += x1 * y2 - x2 * y1; } return Math.abs(a / 2); }
+
+function trovaFoglio(src) {
+  const k = 1000 / Math.max(src.rows, src.cols);
+  const small = new cv.Mat(); cv.resize(src, small, new cv.Size(Math.round(src.cols * k), Math.round(src.rows * k)), 0, 0, cv.INTER_AREA);
+  const W = small.cols, H = small.rows, areaTot = W * H;
+  const rgb = new cv.Mat(); cv.cvtColor(small, rgb, cv.COLOR_RGBA2RGB);
+  const hsv = new cv.Mat(); cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV); cv.GaussianBlur(hsv, hsv, new cv.Size(7, 7), 0);
+  const mask = new cv.Mat(H, W, cv.CV_8UC1);
+  for (let i = 0, j = 0; i < W * H; i++, j += 3) mask.data[i] = (hsv.data[j + 1] < 60 && hsv.data[j + 2] > 90) ? 255 : 0;
+  cv.morphologyEx(mask, mask, cv.MORPH_CLOSE, cv.Mat.ones(9, 9, cv.CV_8U));
+  const lato = (Math.round(0.045 * Math.max(W, H)) | 1);
+  cv.morphologyEx(mask, mask, cv.MORPH_OPEN, cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(lato, lato)));
+  const lab = new cv.Mat(), st = new cv.Mat(), ce = new cv.Mat();
+  const n = cv.connectedComponentsWithStats(mask, lab, st, ce);
+  let quad = null;
+  if (n > 1) {
+    let idx = lab.data32S[Math.floor(H / 2) * W + Math.floor(W / 2)];
+    if (!idx) { let best = 0; for (let i = 1; i < n; i++) { const a = st.data32S[i * 5 + 4]; if (a > best) { best = a; idx = i; } } }
+    if (st.data32S[idx * 5 + 4] > 0.2 * areaTot) {
+      const comp = new cv.Mat(H, W, cv.CV_8UC1);
+      for (let i = 0; i < W * H; i++) comp.data[i] = lab.data32S[i] === idx ? 255 : 0;
+      const cnts = new cv.MatVector(), hier = new cv.Mat();
+      cv.findContours(comp, cnts, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      let big = 0, bi = 0; for (let i = 0; i < cnts.size(); i++) { const a = cv.contourArea(cnts.get(i)); if (a > big) { big = a; bi = i; } }
+      const hull = new cv.Mat(); cv.convexHull(cnts.get(bi), hull, false, true);
+      const approx = new cv.Mat(); cv.approxPolyDP(hull, approx, 0.02 * cv.arcLength(hull, true), true);
+      if (approx.rows === 4) quad = puntiDaMat(approx);
+      else { const r = cv.minAreaRect(hull); quad = cv.RotatedRect.points(r).map(p => [p.x, p.y]); }
+      comp.delete(); cnts.delete(); hier.delete(); hull.delete(); approx.delete();
+    }
+  }
+  if (!quad) {   // ripiego: bordi netti
+    const g = new cv.Mat(); cv.cvtColor(small, g, cv.COLOR_RGBA2GRAY); cv.GaussianBlur(g, g, new cv.Size(5, 5), 0);
+    const e = new cv.Mat(); cv.Canny(g, e, 40, 140); cv.dilate(e, e, cv.Mat.ones(3, 3, cv.CV_8U), new cv.Point(-1, -1), 2);
+    const cnts = new cv.MatVector(), hier = new cv.Mat(); cv.findContours(e, cnts, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    const elenco = []; for (let i = 0; i < cnts.size(); i++) elenco.push([cv.contourArea(cnts.get(i)), i]);
+    elenco.sort((a, b) => b[0] - a[0]);
+    for (const [, i] of elenco.slice(0, 5)) {
+      const a = new cv.Mat(); const c = cnts.get(i); cv.approxPolyDP(c, a, 0.02 * cv.arcLength(c, true), true);
+      if (a.rows === 4 && cv.isContourConvex(a) && cv.contourArea(a) > 0.2 * areaTot) { quad = puntiDaMat(a); a.delete(); break; }
+      a.delete();
+    }
+    g.delete(); e.delete(); cnts.delete(); hier.delete();
+  }
+  small.delete(); rgb.delete(); hsv.delete(); mask.delete(); lab.delete(); st.delete(); ce.delete();
+  if (!quad || areaPoligono(quad) > 0.93 * areaTot) return null;
+  return ordinaPunti(quad).map(([x, y]) => [x / k, y / k]);
+}
+function raddrizza(src, q) {
+  const [tl, tr, br, bl] = q, dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const w = Math.round(Math.max(dist(br, bl), dist(tr, tl))), h = Math.round(Math.max(dist(tr, br), dist(tl, bl)));
+  const a = cv.matFromArray(4, 1, cv.CV_32FC2, q.flat());
+  const b = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, w - 1, 0, w - 1, h - 1, 0, h - 1]);
+  const M = cv.getPerspectiveTransform(a, b), out = new cv.Mat();
+  cv.warpPerspective(src, out, M, new cv.Size(w, h));
+  a.delete(); b.delete(); M.delete();
+  return out;
+}
+function mediana(arr, passo) { const v = []; for (let i = 0; i < arr.length; i += passo) v.push(arr[i]); v.sort((x, y) => x - y); return v[v.length >> 1] || 0; }
+function sbiancaIntrusi(img) {   // img RGBA, modificata sul posto
+  const W = img.cols, H = img.rows;
+  const b = new cv.Mat(); cv.GaussianBlur(img, b, new cv.Size(9, 9), 0);
+  const rgb = new cv.Mat(); cv.cvtColor(b, rgb, cv.COLOR_RGBA2RGB);
+  const hsv = new cv.Mat(); cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV);
+  const S = new Uint8Array(W * H), V = new Uint8Array(W * H);
+  for (let i = 0, j = 0; i < W * H; i++, j += 3) { S[i] = hsv.data[j + 1]; V[i] = hsv.data[j + 2]; }
+  const sC = mediana(S, 7), vC = mediana(V, 7), vMin = Math.min(70, vC * 0.4);
+  const m = new cv.Mat(H, W, cv.CV_8UC1);
+  for (let i = 0; i < W * H; i++) m.data[i] = (S[i] > sC + 50 || V[i] < vMin) ? 255 : 0;
+  cv.morphologyEx(m, m, cv.MORPH_OPEN, cv.Mat.ones(15, 15, cv.CV_8U));
+  const lab = new cv.Mat(), st = new cv.Mat(), ce = new cv.Mat();
+  const n = cv.connectedComponentsWithStats(m, lab, st, ce);
+  let tolti = 0;
+  for (let i = 1; i < n; i++) {
+    const x = st.data32S[i * 5], y = st.data32S[i * 5 + 1], w = st.data32S[i * 5 + 2], h = st.data32S[i * 5 + 3], a = st.data32S[i * 5 + 4];
+    const bordo = x <= 2 || y <= 2 || x + w >= W - 2 || y + h >= H - 2;
+    if (bordo && a > 0.004 * W * H && a < 0.30 * W * H) {
+      const c = new cv.Mat(H, W, cv.CV_8UC1);
+      for (let p = 0; p < W * H; p++) c.data[p] = lab.data32S[p] === i ? 255 : 0;
+      cv.dilate(c, c, cv.Mat.ones(15, 15, cv.CV_8U));
+      for (let p = 0; p < W * H; p++) if (c.data[p]) { img.data[p * 4] = 255; img.data[p * 4 + 1] = 255; img.data[p * 4 + 2] = 255; }
+      c.delete(); tolti++;
+    }
+  }
+  b.delete(); rgb.delete(); hsv.delete(); m.delete(); lab.delete(); st.delete(); ce.delete();
+  return tolti;
+}
+function rimuoviOmbre(img, colore) {   // restituisce un nuovo Mat (GRAY o RGB)
+  function piano(p) {
+    const bg = new cv.Mat(); cv.dilate(p, bg, cv.Mat.ones(7, 7, cv.CV_8U)); cv.medianBlur(bg, bg, 31);
+    const d = new cv.Mat(); cv.absdiff(p, bg, d); bg.delete();
+    for (let i = 0; i < d.data.length; i++) d.data[i] = 255 - d.data[i];
+    cv.normalize(d, d, 0, 255, cv.NORM_MINMAX);
+    const isto = new Uint32Array(256); for (let i = 0; i < d.data.length; i++) isto[d.data[i]]++;
+    let cum = 0, nero = 0; const soglia = d.data.length * 0.005;
+    for (let v = 0; v < 256; v++) { cum += isto[v]; if (cum >= soglia) { nero = v; break; } }
+    nero = Math.min(nero + 20, 200);
+    const lut = new Uint8Array(256), den = Math.max(240 - nero, 20);
+    for (let v = 0; v < 256; v++) lut[v] = Math.max(0, Math.min(255, Math.round((v - nero) * 255 / den)));
+    for (let i = 0; i < d.data.length; i++) d.data[i] = lut[d.data[i]];
+    return d;
+  }
+  if (colore) {
+    const rgb = new cv.Mat(); cv.cvtColor(img, rgb, cv.COLOR_RGBA2RGB);
+    const ch = new cv.MatVector(); cv.split(rgb, ch);
+    const out = new cv.MatVector(); for (let i = 0; i < 3; i++) out.push_back(piano(ch.get(i)));
+    const r = new cv.Mat(); cv.merge(out, r); rgb.delete(); ch.delete(); out.delete(); return r;
+  }
+  const g = new cv.Mat(); cv.cvtColor(img, g, cv.COLOR_RGBA2GRAY);
+  const r = piano(g); g.delete(); return r;
+}
+function limita(m) {
+  const L = Math.max(m.rows, m.cols); if (L <= LATO_MAX) return m;
+  const k = LATO_MAX / L, o = new cv.Mat(); cv.resize(m, o, new cv.Size(Math.round(m.cols * k), Math.round(m.rows * k)), 0, 0, cv.INTER_AREA);
+  m.delete(); return o;
+}
+function ruota(m, gradi) {
+  const o = new cv.Mat(); cv.rotate(m, o, { 90: cv.ROTATE_90_CLOCKWISE, 180: cv.ROTATE_180, 270: cv.ROTATE_90_COUNTERCLOCKWISE }[gradi]); return o;
+}
+
+/* ============================================================ OCR */
+const PAROLE_COMUNI = new Set(("di il la le lo che del della dei delle per con non sono data importo codice fiscale comune totale euro pagamento via agenzia entrate contratto conto sig nato residente numero anno banca credito debito saldo periodo imposta somma ufficio tribunale presente seguente nel nella alla al dal dalla sul sulla come anche essere stato tra fra ai agli più ovvero oggetto spett").split(" "));
+function qualita(t) { return (t.toLowerCase().match(/[a-zàèéìòù]+/g) || []).filter(w => PAROLE_COMUNI.has(w)).length; }
+async function leggi(canvas, pdf) {
+  const r = await ocr.recognize(canvas, {}, { text: true, pdf: !!pdf });
+  return { testo: r.data.text || "", pdf: r.data.pdf ? new Uint8Array(r.data.pdf) : null };
+}
+function canvasRidotto(c, lato) {
+  const k = Math.min(1, lato / Math.max(c.width, c.height));
+  if (k === 1) return c;
+  const o = document.createElement("canvas"); o.width = Math.round(c.width * k); o.height = Math.round(c.height * k);
+  o.getContext("2d").drawImage(c, 0, 0, o.width, o.height); return o;
+}
+async function jpegDaCanvas(c) {
+  const b = await new Promise(r => c.toBlob(r, "image/jpeg", QUALITA_JPEG));
+  return new Uint8Array(await b.arrayBuffer());
+}
+
+/* ============================================================ pagine */
+async function paginaDaCanvas(canvasIn, sorgente, n, tot, colore, daFoto) {
+  const pg = { sorgente, n, tot, foto: true, interventi: [], testo: "" };
+  let src = matDaCanvas(canvasIn);
+  if (daFoto) {
+    const q = trovaFoglio(src);
+    if (q) { const r = raddrizza(src, q); src.delete(); src = r; pg.interventi.push("ritaglio e prospettiva"); }
+  }
+  if (sbiancaIntrusi(src)) pg.interventi.push("rimossi elementi estranei dal bordo");
+  let pulita = rimuoviOmbre(src, colore); src.delete();
+  pg.interventi.push("pulizia sfondo/ombre");
+  pulita = limita(pulita);
+  let c = canvasDaMat(pulita);
+  let ris = await leggi(c, true);
+  if (qualita(ris.testo) < 12) {   // foto girata o capovolta: si prova a ruotarla
+    let migliore = null, qMax = qualita(ris.testo);
+    for (const g of [90, 180, 270]) {
+      const rm = ruota(pulita, g), rc = canvasDaMat(rm); rm.delete();
+      const q = qualita((await leggi(canvasRidotto(rc, 1400), false)).testo);
+      if (q > qMax + 5) { migliore = g; qMax = q; }
+    }
+    if (migliore) {
+      const rm = ruota(pulita, migliore); pulita.delete(); pulita = rm; c = canvasDaMat(pulita);
+      ris = await leggi(c, true); pg.interventi.push("ruotata di " + migliore + "°");
+    }
+  }
+  pulita.delete();
+  pg.testo = ris.testo; pg.pdf = ris.pdf; pg.jpeg = await jpegDaCanvas(c);
+  pg.larg = c.width; pg.alt = c.height; pg.anteprima = canvasRidotto(c, 220).toDataURL("image/jpeg", 0.8);
+  return pg;
+}
+async function canvasDaFileImmagine(f) {
+  const bmp = await createImageBitmap(f, { imageOrientation: "from-image" });
+  const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+  c.getContext("2d").drawImage(bmp, 0, 0); bmp.close?.(); return c;
+}
+async function leggiIngresso(colore, avanz) {
+  const pagine = [], scartati = [];
+  for (let fi = 0; fi < FILES.length; fi++) {
+    const f = FILES[fi], nome = f.name, low = nome.toLowerCase();
+    avanz(fi, "Leggo " + nome);
+    try {
+      if (/\.(jpe?g|png|webp|bmp|gif|tiff?)$/.test(low) || f.type.startsWith("image/")) {
+        log("  foto/immagine: " + nome);
+        pagine.push(await paginaDaCanvas(await canvasDaFileImmagine(f), nome, 1, 1, colore, true));
+      } else if (low.endsWith(".pdf")) {
+        const dati = new Uint8Array(await f.arrayBuffer());
+        const doc = await pdfjsLib.getDocument({ data: dati.slice() }).promise;
+        log("  PDF: " + nome + " (" + doc.numPages + " pag.)");
+        for (let i = 1; i <= doc.numPages; i++) {
+          const page = await doc.getPage(i);
+          const tc = await page.getTextContent();
+          const testo = tc.items.map(it => it.str + (it.hasEOL ? "\n" : " ")).join("");
+          if (testo.trim().length > 80) {   // PDF "vero": si conserva la pagina originale
+            const vp = page.getViewport({ scale: 60 / 72 }), c = document.createElement("canvas");
+            c.width = vp.width; c.height = vp.height; await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+            pagine.push({ sorgente: nome, n: i, tot: doc.numPages, foto: false, nativo: { dati, indice: i - 1 }, testo,
+                          interventi: ["PDF originale conservato"], anteprima: canvasRidotto(c, 220).toDataURL("image/jpeg", 0.8) });
+          } else {                           // PDF scansionato
+            const vp = page.getViewport({ scale: DPI / 72 }), c = document.createElement("canvas");
+            c.width = vp.width; c.height = vp.height; await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+            pagine.push(await paginaDaCanvas(c, nome, i, doc.numPages, colore, true));
+          }
+          await pausa();
+        }
+      } else { scartati.push(nome); log("  non elaborato (formato non supportato): " + nome); }
+    } catch (e) { scartati.push(nome); log("  !! impossibile leggere " + nome + ": " + e.message); }
+  }
+  return { pagine, scartati };
+}
+
+/* ============================================================ riconoscimento */
+const RE_PAG = /\bpag(?:ina|\.)?\s*(\d{1,3})\s*(?:di|\/|of)\s*(\d{1,3})\b/;
+const RE_CF = /\b[A-Z]{6}\d{2}[A-EHLMPRST]\d{2}[A-Z]\d{3}[A-Z]\b/g;
+function classifica(pg) {
+  const t = norm(pg.testo), testa = t.slice(0, 700);
+  let migliore = null, max = 0, forteTesta = false;
+  for (const tipo of TIPI) {
+    let p = 0;
+    for (const f of tipo.forti) { if (f.rx.test(t)) p += 3 + f.n; if (f.rx.test(testa)) p += 2; }
+    for (const f of tipo.parole) if (f.rx.test(t)) p += 1;
+    if (p > max) { max = p; migliore = tipo; forteTesta = tipo.forti.some(f => f.rx.test(testa)); }
+  }
+  pg.tipo = max >= 4 ? migliore : null; pg.punti = max; pg.forteTesta = forteTesta && !!pg.tipo;
+  const m = t.match(RE_PAG);
+  pg.paginazione = (m && +m[1] >= 1 && +m[1] <= +m[2] && +m[2] <= 300) ? [+m[1], +m[2]] : null;
+  pg.cf = new Set(pg.testo.toUpperCase().replace(/ /g, "").match(RE_CF) || []);
+}
+function etichetta(p) { return p.sorgente + (p.tot > 1 ? " p." + p.n : ""); }
+function incompleto(doc) { const pg = doc.pagine.filter(p => p.paginazione).map(p => p.paginazione); return pg.length > 0 && pg[pg.length - 1][0] < pg[pg.length - 1][1]; }
+function nomiInSequenza(a, b) {
+  const s = x => x.replace(/\.[^.]+$/, ""), ma = s(a).match(/^(.*?)(\d+)\D*$/), mb = s(b).match(/^(.*?)(\d+)\D*$/);
+  return !!(ma && mb && ma[1] === mb[1] && (+mb[2]) - (+ma[2]) === 1);
+}
+function nuovoDocumento(doc, p) {
+  const u = doc.pagine[doc.pagine.length - 1];
+  if (p.paginazione) {
+    if (p.paginazione[0] === 1) return [true];
+    if (u.paginazione && p.paginazione[1] === u.paginazione[1] && p.paginazione[0] === u.paginazione[0] + 1) return [false, "pagine consecutive per numerazione"];
+  }
+  const cfDoc = new Set(doc.pagine.flatMap(x => [...x.cf]));
+  if (p.cf.size && cfDoc.size && ![...p.cf].some(c => cfDoc.has(c))) return [true];
+  if (p.tipo && doc.tipo && p.tipo !== doc.tipo) return [true];
+  if (p.sorgente === u.sorgente) return [false];
+  if (p.foto && u.foto && p.tot === 1 && u.tot === 1) {
+    if (p.tipo && p.tipo === doc.tipo) {
+      if (p.forteTesta && !p.paginazione) return [true];
+      return [false, "unito: foto successive dello stesso tipo"];
+    }
+    if (!p.tipo && (incompleto(doc) || nomiInSequenza(u.sorgente, p.sorgente))) return [false, "unito per vicinanza: pagina non riconosciuta subito dopo (da controllare)"];
+  }
+  return [true];
+}
+function raggruppa(pagine) {
+  const docs = [];
+  for (const p of pagine) {
+    if (docs.length) {
+      const d = docs[docs.length - 1], [nuovo, motivo] = nuovoDocumento(d, p);
+      if (!nuovo) { d.pagine.push(p); if (motivo) d.note.push(etichetta(p) + ": " + motivo); if (!d.tipo && p.tipo) d.tipo = p.tipo; continue; }
+    }
+    docs.push({ pagine: [p], tipo: p.tipo, note: [] });
+  }
+  for (const d of docs) if (!d.tipo) d.note.push("tipo non riconosciuto: da verificare");
+  return docs;
+}
+const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+const RE_DATA = /\b(\d{1,2})[\/.-](\d{1,2})[\/.-]((?:19|20)\d{2})\b/g;
+const RE_MESE = new RegExp("\\b(" + MESI.join("|") + ")\\s+(20\\d{2})\\b");
+const RE_NASCITA = /(nat[oa]|nascita|nato\/a)\b[^\n]{0,30}$/;
+const RE_BUONA = /(rilasciat\w*|rilascio|emess\w*|\bin data|\bdata:|\bli|\bli'|\bdel|[a-z]{3},)\s*$/;
+const RE_FINE = /\b(al|fino al|a tutto il|saldo finale)\s*$/;
+function dataDocumento(doc) {
+  const oggi = new Date(), lim = new Date(oggi.getTime() + 60 * 864e5);
+  let best = null;
+  for (const p of doc.pagine) {
+    const t = norm(p.testo);
+    for (const m of t.matchAll(RE_DATA)) {
+      const g = +m[1], me = +m[2], a = +m[3], d = new Date(a, me - 1, g);
+      if (d.getMonth() !== me - 1 || d.getDate() !== g || d > lim || a < 1990) continue;
+      const prima = t.slice(Math.max(0, m.index - 45), m.index);
+      if (RE_NASCITA.test(prima)) continue;
+      const punti = 1 + (RE_BUONA.test(prima) ? 3 : 0) + (RE_FINE.test(prima) ? 2 : 0);
+      if (!best || punti > best[0] || (punti === best[0] && d > best[1])) best = [punti, d];
+    }
+  }
+  if (best) { const d = best[1]; return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  for (const p of doc.pagine) { const m = norm(p.testo).match(RE_MESE); if (m) return m[2] + "-" + String(MESI.indexOf(m[1]) + 1).padStart(2, "0"); }
+  return null;
+}
+
+/* ============================================================ uscita: PDF e zip */
+async function creaPdf(doc) {
+  const { PDFDocument } = PDFLib;
+  const out = await PDFDocument.create();
+  for (const p of doc.pagine) {
+    try {
+      if (p.nativo) {
+        const src = p.nativo.doc || (p.nativo.doc = await PDFDocument.load(p.nativo.dati, { ignoreEncryption: true }));
+        const [pg] = await out.copyPages(src, [p.nativo.indice]); out.addPage(pg); continue;
+      }
+      if (p.pdf && p.pdf.length) {
+        const src = await PDFDocument.load(p.pdf); const pgs = await out.copyPages(src, src.getPageIndices()); pgs.forEach(x => out.addPage(x)); continue;
+      }
+    } catch (e) { log("  (pagina " + etichetta(p) + " come immagine: " + e.message + ")"); }
+    const img = await out.embedJpg(p.jpeg), w = p.larg * 72 / DPI, h = p.alt * 72 / DPI;
+    out.addPage([w, h]).drawImage(img, { x: 0, y: 0, width: w, height: h });
+    p.interventi.push("PDF senza testo ricercabile");
+  }
+  out.setTitle(doc.tipo ? doc.tipo.nome : "Documento da verificare"); out.setCreator("SmiDoc");
+  return await out.save();
+}
+let ZIP = null, NOME_ZIP = "";
+function riepilogoHtml(docs, scartati, pratica, quando, perStampa) {
+  const nVer = docs.filter(d => !d.tipo || d.note.some(n => n.includes("vicinanza"))).length;
+  const perC = {}; for (const d of docs) perC[d.cartella] = (perC[d.cartella] || 0) + 1;
+  const righe = docs.map(d => {
+    const ver = !d.tipo || d.note.some(n => n.includes("vicinanza"));
+    return `<tr class="${ver ? "verifica" : ""}"><td><img src="${d.pagine[0].anteprima}" alt=""></td>
+<td>${esc(d.nomeFile)}<br><small>${esc(d.cartella)}</small></td><td>${d.tipo ? esc(d.tipo.nome) : "<b>non riconosciuto</b>"}</td><td>${d.pagine.length}</td>
+<td><small>${d.pagine.map(p => esc(etichetta(p) + " – " + p.interventi.join(", "))).join("<br>")}</small></td><td><small>${d.note.map(esc).join("<br>")}</small></td></tr>`;
+  }).join("");
+  return `<h2 style="margin-top:0">SmiDoc – riepilogo dei documenti analizzati</h2>
+<p class="sintesi">Pratica: <b>${esc(pratica || "—")}</b> · Elaborazione del ${quando}<br>
+<b>${docs.length}</b> documenti creati, <b>${nVer}</b> da controllare (righe in giallo).<br><small>${Object.entries(perC).sort().map(([k, v]) => esc(k) + ": " + v).join(", ")}</small></p>
+<div class="scorri"><table><tr><th>Anteprima</th><th>File creato</th><th>Tipo</th><th>Pag.</th><th>Provenienza e trattamenti</th><th>Note</th></tr>${righe}</table></div>
+<h3>File non elaborati</h3><ul>${scartati.length ? scartati.map(s => "<li>" + esc(s) + "</li>").join("") : "<li>nessuno</li>"}</ul>`;
+}
+function paginaRiepilogo(corpo, quando) {
+  return `<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><title>SmiDoc – riepilogo ${quando}</title><style>
+body{font-family:sans-serif;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:6px;vertical-align:top;text-align:left}
+th{background:#eee}tr.verifica td{background:#fff4d6}img{max-width:110px;border:1px solid #999}button{float:right;font-size:14px;padding:6px 12px}
+@media print{button{display:none}tr{page-break-inside:avoid}tr.verifica td{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{size:A4 landscape;margin:12mm}}
+</style></head><body><button onclick="print()">Stampa / Salva PDF</button>${corpo}</body></html>`;
+}
+
+/* ============================================================ esecuzione */
+async function avvia() {
+  window.SMIDOC_IN_CORSO = true; aggiornaPulsanti();
+  $("log").textContent = ""; $("risultati").style.display = "none";
+  const colore = $("colore").checked, pratica = $("pratica").value.trim();
+  const ora = new Date(), ts = ora.toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "_");
+  const quando = ora.toLocaleDateString("it-IT") + " " + ora.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  try {
+    log("1) Lettura e pulizia delle pagine…");
+    const { pagine, scartati } = await leggiIngresso(colore, (i, t) => stato(t + "…", Math.round(i / FILES.length * 70)));
+    log("2) Riconoscimento di " + pagine.length + " pagine…"); stato("Riconoscimento dei documenti…", 75);
+    for (const p of pagine) { classifica(p); log("  " + etichetta(p) + ": " + (p.tipo ? p.tipo.nome : "?") + " (punti " + p.punti + ")" + (p.paginazione ? ", pag. " + p.paginazione.join("/") : "")); }
+    const docs = raggruppa(pagine);
+    log("3) Creazione di " + docs.length + " documenti…");
+    ZIP = new JSZip();
+    const nomeRadice = "SmiDoc_" + (pratica ? pratica.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_") : "pratica") + "_" + ts;
+    const radice = ZIP.folder(nomeRadice);
+    if (CONFIG.opzioni && CONFIG.opzioni.crea_tutte_le_cartelle)
+      for (const [k, v] of Object.entries(CONFIG.cartelle)) if (k !== "da_verificare") radice.folder(v);
+    const usati = new Set(), riusciti = [];
+    for (let i = 0; i < docs.length; i++) {
+      const d = docs[i]; stato("Creo i PDF… (" + (i + 1) + "/" + docs.length + ")", 80 + Math.round(i / docs.length * 18));
+      try {
+        d.cartella = CONFIG.cartelle[d.tipo ? d.tipo.cartella : "da_verificare"];
+        const data = dataDocumento(d), base = (data ? data + "_" : "") + (d.tipo ? d.tipo.sigla : "Documento");
+        let nome = base + ".pdf", k = 2; while (usati.has(d.cartella + "/" + nome)) nome = base + "_" + (k++) + ".pdf";
+        usati.add(d.cartella + "/" + nome); d.nomeFile = nome;
+        radice.folder(d.cartella).file(nome, await creaPdf(d));
+        riusciti.push(d); log("  -> " + d.cartella + "/" + nome + "  (" + d.pagine.length + " pag.)");
+      } catch (e) { log("  !! documento non creato: " + e.message); scartati.push(...new Set(d.pagine.map(p => p.sorgente))); }
+      await pausa();
+    }
+    const corpo = riepilogoHtml(riusciti, scartati, pratica, quando);
+    radice.folder("_SmiDoc").file("riepilogo_" + ts + ".html", paginaRiepilogo(corpo, quando));
+    NOME_ZIP = nomeRadice + ".zip";
+    $("riepilogo").innerHTML = corpo; $("risultati").style.display = "block";
+    stato("Fatto: " + riusciti.length + " documenti. Scarica lo zip e scompattalo nella cartella della pratica.", 100);
+    window.SMIDOC_ESITO = { documenti: riusciti.map(d => d.cartella + "/" + d.nomeFile), scartati };
+    $("risultati").scrollIntoView({ behavior: "smooth" });
+  } catch (e) {
+    stato("Errore: " + e.message); log("ERRORE: " + (e.stack || e.message));
+  } finally { window.SMIDOC_IN_CORSO = false; aggiornaPulsanti(); }
+}
+async function scaricaZip() {
+  if (!ZIP) return;
+  $("btnZip").disabled = true; stato("Preparo lo zip…");
+  const blob = await ZIP.generateAsync({ type: "blob" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = NOME_ZIP; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  $("btnZip").disabled = false; stato("Zip scaricato: " + NOME_ZIP);
+}
+
+/* ============================================================ eventi */
+const zona = $("zona");
+zona.addEventListener("click", () => $("scegli").click());
+zona.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("scegli").click(); } });
+$("scegli").addEventListener("change", e => { aggiungi(e.target.files); e.target.value = ""; });
+["dragenter", "dragover"].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.add("sopra"); }));
+["dragleave", "drop"].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.remove("sopra"); }));
+zona.addEventListener("drop", e => aggiungi(e.dataTransfer.files));
+$("btnSvuota").addEventListener("click", () => { FILES = []; aggiungi([]); });
+$("btnAvvia").addEventListener("click", avvia);
+$("btnZip").addEventListener("click", scaricaZip);
+$("btnStampa").addEventListener("click", () => print());
+$("testoGuida").innerHTML = GUIDA_HTML;
+$("btnAiuto").addEventListener("click", () => $("dlgAiuto").showModal());
+document.addEventListener("keydown", e => { if (e.key === "F1") { e.preventDefault(); $("dlgAiuto").showModal(); } });
+/* per le prove automatiche: carica file da indirizzi della stessa origine */
+window.smidocProva = async (urls) => { const fs = []; for (const u of urls) { const r = await fetch(u); fs.push(new File([await r.blob()], decodeURIComponent(u.split("/").pop()))); } aggiungi(fs); };
+prepara();
+</script>
+</body>
+</html>
